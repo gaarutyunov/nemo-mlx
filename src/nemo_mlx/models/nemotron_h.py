@@ -642,43 +642,46 @@ class NemotronHMOE(nn.Module):
         Returns:
             Output tensor [batch * seq_len, hidden_size]
         """
-        final_hidden_states = mx.zeros_like(hidden_states).astype(topk_weights.dtype)
-
-        # Create expert mask (one-hot for each selected expert)
+        num_tokens, hidden_size = hidden_states.shape
         num_experts = len(self.experts)
         top_k = topk_indices.shape[1]
+
+        # Initialize output
+        final_hidden_states = mx.zeros_like(hidden_states)
 
         # Process each expert
         for expert_idx in range(num_experts):
             expert = self.experts[expert_idx]
 
-            # Find tokens routed to this expert
+            # Create mask for tokens routed to this expert (across all top-k positions)
+            # Shape: [num_tokens, top_k]
+            expert_mask = topk_indices == expert_idx
+
+            # Check if any tokens are routed to this expert
+            if not mx.any(expert_mask):
+                continue
+
+            # For each top-k position, accumulate weighted expert outputs
             for k in range(top_k):
-                # Check which tokens have this expert at position k
-                mask = topk_indices[:, k] == expert_idx
+                # Mask for this expert at position k: [num_tokens]
+                mask_k = expert_mask[:, k]
 
-                if mx.any(mask):
-                    # Get indices of tokens for this expert
-                    token_indices = mx.where(mask)[0]
+                # Get weights for this position: [num_tokens]
+                weights_k = topk_weights[:, k]
 
-                    if len(token_indices) > 0:
-                        # Get expert weights for these tokens
-                        expert_weights = topk_weights[token_indices, k]
+                # Apply expert to all tokens (we'll mask the output)
+                # This is less efficient but avoids index gathering issues
+                expert_output = expert(hidden_states)  # [num_tokens, hidden_size]
 
-                        # Get input for this expert
-                        expert_input = hidden_states[token_indices]
+                # Weight by routing weights and mask
+                # Expand mask and weights for broadcasting
+                mask_expanded = mx.expand_dims(mask_k.astype(hidden_states.dtype), axis=-1)
+                weights_expanded = mx.expand_dims(weights_k, axis=-1)
 
-                        # Apply expert
-                        expert_output = expert(expert_input)
+                # Add weighted output only for tokens routed to this expert
+                final_hidden_states = final_hidden_states + expert_output * mask_expanded * weights_expanded
 
-                        # Weight and accumulate output
-                        weighted_output = expert_output * mx.expand_dims(expert_weights, axis=-1)
-
-                        # Add to final output
-                        for i, idx in enumerate(token_indices):
-                            final_hidden_states = final_hidden_states.at[int(idx)].add(weighted_output[i])
-
-        return final_hidden_states.astype(hidden_states.dtype)
+        return final_hidden_states
 
     def __call__(self, hidden_states: mx.array) -> mx.array:
         """Forward pass.
