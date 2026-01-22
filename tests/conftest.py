@@ -74,8 +74,10 @@ def test_config():
         chunk_size=64,
         # Simple pattern for testing: Mamba, Attention, MLP, MoE
         hybrid_override_pattern="M*-E",
-        n_routed_experts=4,
+        n_routed_experts=8,  # Must be >= n_group * topk_group
         num_experts_per_tok=2,
+        n_group=2,  # n_routed_experts // n_group must be > 0
+        topk_group=2,
         moe_intermediate_size=256,
         moe_shared_expert_intermediate_size=512,
     )
