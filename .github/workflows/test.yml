@@ -10,6 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # MLX build can take 10-20 minutes
 
     strategy:
       matrix:
@@ -24,35 +25,39 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Cache pip packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        key: ${{ runner.os }}-pip-py${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-pip-py${{ matrix.python-version }}-
 
-    - name: Cache MLX build
-      uses: actions/cache@v3
+    - name: Cache MLX wheel
+      id: cache-mlx
+      uses: actions/cache@v4
       with:
-        path: ../mlx
-        key: ${{ runner.os }}-mlx-build-v1
+        path: ~/.mlx-wheel
+        key: ${{ runner.os }}-mlx-wheel-py${{ matrix.python-version }}-v2
         restore-keys: |
-          ${{ runner.os }}-mlx-build-
+          ${{ runner.os }}-mlx-wheel-py${{ matrix.python-version }}-
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y cmake ninja-build libblas-dev liblapack-dev liblapacke-dev libopenblas-dev gfortran
 
-    - name: Build and install MLX from source
+    - name: Build MLX from source
+      if: steps.cache-mlx.outputs.cache-hit != 'true'
       run: |
-        cd ..
-        if [ ! -d "mlx" ]; then
-          git clone https://github.com/ml-explore/mlx.git
-        fi
+        mkdir -p ~/.mlx-wheel
+        cd /tmp
+        git clone --depth 1 https://github.com/ml-explore/mlx.git
         cd mlx
-        pip install .
-        cd ../nemo-mlx
+        pip wheel . -w ~/.mlx-wheel
+
+    - name: Install MLX from cached wheel
+      run: |
+        pip install ~/.mlx-wheel/mlx-*.whl
 
     - name: Install dependencies
       run: |
@@ -61,17 +66,25 @@ jobs:
         pip install -r requirements-test.txt
         pip install -e .
 
+    - name: Verify MLX installation
+      run: |
+        python -c "import mlx.core as mx; print(f'MLX version: {mx.__version__}')"
+
     - name: Run tests (without PyTorch comparison)
       run: |
         pytest tests/test_components.py -v -s --tb=short -m "not requires_torch and not requires_weights"
 
-    - name: Run tests with PyTorch comparison
+    - name: Install PyTorch for comparison tests
       run: |
         pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+    - name: Run tests with PyTorch comparison
+      run: |
         pytest tests/test_components.py -v -s --tb=short -m "requires_torch and not requires_weights"
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
     - uses: actions/checkout@v4

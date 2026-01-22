@@ -109,7 +109,8 @@ def segment_sum(input_tensor: mx.array) -> mx.array:
 
     # 4. Apply mask to keep only the lower triangular part of the cumulative sum result (incl diagonal this time)
     mask = mx.tril(mx.ones((chunk_size, chunk_size)), k=0)
-    tensor_segsum = mx.where(mask.astype(mx.bool_), tensor_segsum, mx.full_like(tensor_segsum, float("-inf")))
+    neg_inf = mx.full(tensor_segsum.shape, float("-inf"), dtype=tensor_segsum.dtype)
+    tensor_segsum = mx.where(mask.astype(mx.bool_), tensor_segsum, neg_inf)
 
     return tensor_segsum
 

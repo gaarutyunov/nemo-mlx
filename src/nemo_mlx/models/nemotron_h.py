@@ -330,7 +330,8 @@ class NemotronHMamba2Mixer(nn.Module):
         pad_size = (self.chunk_size - seq_len % self.chunk_size) % self.chunk_size
 
         # D residual connection
-        D_expanded = mx.expand_dims(mx.expand_dims(self.D, axis=-1), axis=-1)  # [num_heads, 1, 1]
+        # D shape: [num_heads] -> [1, 1, num_heads, 1] for broadcasting with [batch, seq, num_heads, head_dim]
+        D_expanded = self.D.reshape(1, 1, self.num_heads, 1)
         D_residual = D_expanded * pad_tensor_by_size(hidden_states_ssm, pad_size)
 
         # Discretize x and A
