@@ -327,6 +327,45 @@ def segment_sum(input_tensor):
     return tensor_segsum
 ```
 
+### 6. `mx.where` Single-Argument Form Not Supported
+
+PyTorch's `torch.where(condition)` (single-argument form) returns indices where condition is true. MLX only supports the three-argument form `mx.where(condition, x, y)`. For MoE routing, use vectorized masking instead:
+
+```python
+# PyTorch: Get indices where expert is selected
+# token_indices = torch.where(topk_indices == expert_idx)[0]
+
+# MLX: Use vectorized masking instead
+expert_mask = topk_indices == expert_idx  # [num_tokens, top_k]
+for k in range(top_k):
+    mask_k = expert_mask[:, k]  # Boolean mask for tokens selecting this expert at position k
+    weights_k = topk_weights[:, k]
+    expert_output = expert(hidden_states)
+    # Apply mask via broadcasting
+    mask_expanded = mx.expand_dims(mask_k.astype(hidden_states.dtype), axis=-1)
+    weights_expanded = mx.expand_dims(weights_k, axis=-1)
+    final_hidden_states = final_hidden_states + expert_output * mask_expanded * weights_expanded
+```
+
+### 7. MoE Configuration Constraints
+
+When configuring Mixture of Experts, ensure `n_routed_experts >= n_group`. The routing logic computes `num_experts_per_group = n_routed_experts // n_group`, which must be > 0:
+
+```python
+# Wrong: Will fail with "Cannot infer the shape of an empty array"
+config = NemotronHConfig(
+    n_routed_experts=4,
+    n_group=8,  # 4 // 8 = 0, invalid!
+)
+
+# Correct: Ensure n_routed_experts >= n_group
+config = NemotronHConfig(
+    n_routed_experts=8,  # Must be >= n_group * topk_group
+    n_group=2,           # 8 // 2 = 4, valid
+    topk_group=2,
+)
+```
+
 ## Known Limitations
 
 1. **No KV caching**: Generation requires full sequence recomputation
