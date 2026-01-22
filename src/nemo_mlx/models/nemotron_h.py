@@ -373,7 +373,9 @@ class NemotronHMamba2Mixer(nn.Module):
         states = mx.concatenate([previous_states, states], axis=1)
         A_cumsum_padded = mx.pad(A_cumsum[:, :, :, -1], [(0, 0), (0, 0), (1, 0)])
         decay_chunk = mx.exp(segment_sum(A_cumsum_padded))
-        decay_chunk = decay_chunk.transpose(0, 3, 1, 2)  # [bsz, chunks+1, chunks+1, num_heads]
+        # segment_sum output: [bsz, num_heads, chunks+1, chunks+1]
+        # transpose to: [bsz, chunks+1, chunks+1, num_heads]
+        decay_chunk = decay_chunk.transpose(0, 2, 3, 1)
         new_states = (mx.expand_dims(mx.expand_dims(decay_chunk, axis=-1), axis=-1) * mx.expand_dims(states, axis=2)).sum(axis=1)
         states = new_states[:, :-1]
         # ssm_state = new_states[:, -1]  # Final state for caching (unused currently)
