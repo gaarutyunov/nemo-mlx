@@ -14,8 +14,8 @@
 # limitations under the License.
 """NemotronH model configuration for MLX."""
 
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 
 @dataclass

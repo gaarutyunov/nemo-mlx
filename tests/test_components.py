@@ -18,33 +18,32 @@ This test suite compares the MLX implementation against the PyTorch reference
 to ensure numerical equivalence within acceptable tolerances.
 """
 
+import logging
 import sys
 from pathlib import Path
-import numpy as np
-import pytest
-import logging
 
 import mlx.core as mx
 import mlx.nn as mlx_nn
+import numpy as np
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from nemo_mlx.models.configuration_nemotron_h import NemotronHConfig
 from nemo_mlx.models.nemotron_h import (
-    NemotronHRMSNorm,
     MambaRMSNormGated,
-    NemotronHMLP,
     NemotronHAttention,
-    NemotronHMamba2Mixer,
     NemotronHBlock,
+    NemotronHMamba2Mixer,
+    NemotronHMLP,
     NemotronHModel,
+    NemotronHRMSNorm,
 )
 from nemo_mlx.utils.ssm_utils import (
     pad_tensor_by_size,
+    repeat_kv,
     reshape_into_chunks,
     segment_sum,
-    repeat_kv,
     softplus,
 )
 
@@ -89,7 +88,6 @@ def compute_similarity_metrics(torch_output: np.ndarray, mlx_output: np.ndarray)
 
 def copy_linear_weights(mlx_linear: mlx_nn.Linear, torch_linear):
     """Copy weights from PyTorch Linear to MLX Linear."""
-    import torch
 
     mlx_linear.weight = mx.array(torch_linear.weight.detach().numpy())
     if torch_linear.bias is not None:
@@ -219,7 +217,6 @@ class TestRMSNorm:
 
         # Verify RMS normalization property
         output_np = np.array(output).astype(np.float64)
-        x_np = np.array(x).astype(np.float64)
 
         # After RMS norm, the RMS should be approximately 1 (scaled by weight)
         rms = np.sqrt(np.mean(output_np ** 2, axis=-1, keepdims=True))
@@ -452,11 +449,10 @@ class TestPyTorchComparison:
     @pytest.fixture
     def torch_available(self):
         """Check if PyTorch is available."""
-        try:
-            import torch
-            return True
-        except ImportError:
+        import importlib.util
+        if importlib.util.find_spec("torch") is None:
             pytest.skip("PyTorch not available")
+        return True
 
     def test_rmsnorm_comparison(self, torch_available, random_seed):
         """Compare RMSNorm implementations."""

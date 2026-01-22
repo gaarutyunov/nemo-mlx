@@ -31,7 +31,7 @@ This script handles the conversion of all NemotronH components including:
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 import numpy as np
 
@@ -201,7 +201,6 @@ def verify_conversion(
     Returns:
         True if all parameters match within tolerance
     """
-    import mlx.core as mx
 
     logger.info("Verifying conversion...")
     all_match = True
@@ -327,7 +326,7 @@ def main():
     )
 
     if success:
-        logger.info(f"\nConversion complete!")
+        logger.info("\nConversion complete!")
         logger.info(f"Input:  {args.input}")
         logger.info(f"Output: {args.output}")
         return 0

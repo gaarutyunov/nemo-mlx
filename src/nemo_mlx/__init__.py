@@ -13,16 +13,16 @@
 # limitations under the License.
 """NemotronH MLX implementation - a port of the PyTorch NemotronH model to MLX."""
 
+from nemo_mlx.models.configuration_nemotron_h import NemotronHConfig
 from nemo_mlx.models.nemotron_h import (
-    NemotronHModel,
-    NemotronHForCausalLM,
-    NemotronHBlock,
-    NemotronHMamba2Mixer,
     NemotronHAttention,
+    NemotronHBlock,
+    NemotronHForCausalLM,
+    NemotronHMamba2Mixer,
     NemotronHMLP,
+    NemotronHModel,
     NemotronHMOE,
 )
-from nemo_mlx.models.configuration_nemotron_h import NemotronHConfig
 
 __all__ = [
     "NemotronHConfig",

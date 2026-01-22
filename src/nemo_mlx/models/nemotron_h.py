@@ -19,23 +19,21 @@ This is a port of the PyTorch NemotronH model to MLX, optimized for Apple Silico
 The model is a hybrid architecture combining Mamba2 (SSM), Attention, MLP, and MoE layers.
 """
 
-import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import mlx.core as mx
 import mlx.nn as nn
 
 from nemo_mlx.models.configuration_nemotron_h import NemotronHConfig
 from nemo_mlx.utils.ssm_utils import (
+    apply_mask_to_padding_states,
     pad_tensor_by_size,
+    repeat_kv,
     reshape_into_chunks,
     segment_sum,
-    apply_mask_to_padding_states,
-    repeat_kv,
     softplus,
 )
-
 
 # Activation functions mapping
 ACT2FN = {
@@ -378,7 +376,7 @@ class NemotronHMamba2Mixer(nn.Module):
         decay_chunk = decay_chunk.transpose(0, 3, 1, 2)  # [bsz, chunks+1, chunks+1, num_heads]
         new_states = (mx.expand_dims(mx.expand_dims(decay_chunk, axis=-1), axis=-1) * mx.expand_dims(states, axis=2)).sum(axis=1)
         states = new_states[:, :-1]
-        ssm_state = new_states[:, -1]
+        # ssm_state = new_states[:, -1]  # Final state for caching (unused currently)
 
         # 4. Compute state -> output conversion per chunk
         state_decay_out = mx.exp(A_cumsum)
@@ -646,7 +644,6 @@ class NemotronHMOE(nn.Module):
 
         # Create expert mask (one-hot for each selected expert)
         num_experts = len(self.experts)
-        num_tokens = hidden_states.shape[0]
         top_k = topk_indices.shape[1]
 
         # Process each expert

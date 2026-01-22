@@ -15,10 +15,11 @@
 Pytest configuration and shared fixtures for NemotronH MLX tests.
 """
 
-import pytest
 import logging
 import sys
 from pathlib import Path
+
+import pytest
 
 # Configure logging for tests
 logging.basicConfig(
@@ -125,8 +126,8 @@ def small_attention_config():
 @pytest.fixture
 def random_seed():
     """Set random seeds for reproducibility."""
-    import numpy as np
     import mlx.core as mx
+    import numpy as np
 
     seed = 42
     np.random.seed(seed)
