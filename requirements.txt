@@ -1,0 +1,4 @@
+# Core dependencies for NemotronH MLX
+numpy>=1.24.0
+# MLX is installed from source on Linux
+# On macOS with Apple Silicon: pip install mlx

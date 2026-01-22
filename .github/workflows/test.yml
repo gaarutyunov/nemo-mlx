@@ -1,0 +1,91 @@
+name: NemotronH MLX Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Cache MLX build
+      uses: actions/cache@v3
+      with:
+        path: ../mlx
+        key: ${{ runner.os }}-mlx-build-v1
+        restore-keys: |
+          ${{ runner.os }}-mlx-build-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build libblas-dev liblapack-dev liblapacke-dev libopenblas-dev gfortran
+
+    - name: Build and install MLX from source
+      run: |
+        cd ..
+        if [ ! -d "mlx" ]; then
+          git clone https://github.com/ml-explore/mlx.git
+        fi
+        cd mlx
+        pip install .
+        cd ../nemo-mlx
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+        pip install -e .
+
+    - name: Run tests (without PyTorch comparison)
+      run: |
+        pytest tests/test_components.py -v -s --tb=short -m "not requires_torch and not requires_weights"
+
+    - name: Run tests with PyTorch comparison
+      run: |
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pytest tests/test_components.py -v -s --tb=short -m "requires_torch and not requires_weights"
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install lint dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff
+
+    - name: Run ruff
+      run: |
+        ruff check src/ tests/ --ignore E501,E402
