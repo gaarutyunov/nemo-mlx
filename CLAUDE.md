@@ -246,6 +246,87 @@ GitHub Actions workflow builds MLX from source on Linux:
 
 The wheel is cached between runs for faster CI.
 
+## Common Porting Pitfalls
+
+### 1. Transpose Dimension Order
+
+PyTorch's `transpose(dim0, dim1)` swaps two dimensions. MLX's `transpose` takes a full permutation tuple:
+
+```python
+# PyTorch: swap dims 1 and 3
+# From [bsz, num_heads, chunks+1, chunks+1] to [bsz, chunks+1, chunks+1, num_heads]
+x = x.transpose(1, 3)
+
+# MLX: specify full permutation
+# Wrong: transpose(0, 3, 1, 2) gives [bsz, chunks+1, num_heads, chunks+1]
+# Correct: transpose(0, 2, 3, 1) gives [bsz, chunks+1, chunks+1, num_heads]
+x = x.transpose(0, 2, 3, 1)
+```
+
+### 2. Missing `full_like` Function
+
+MLX doesn't have `mx.full_like()`. Use `mx.full()` with explicit shape:
+
+```python
+# PyTorch
+mask = torch.full_like(tensor, float("-inf"))
+
+# MLX
+mask = mx.full(tensor.shape, float("-inf"), dtype=tensor.dtype)
+```
+
+### 3. Broadcasting Shape Alignment
+
+MLX requires explicit reshaping for broadcasting:
+
+```python
+# PyTorch: [num_heads] automatically broadcasts with [batch, seq, num_heads, dim]
+D_residual = self.D * hidden_states
+
+# MLX: Must reshape explicitly
+D_expanded = self.D.reshape(1, 1, self.num_heads, 1)
+D_residual = D_expanded * hidden_states
+```
+
+### 4. Einsum Limitations
+
+MLX's einsum may have different performance characteristics. Consider manual implementations for complex operations:
+
+```python
+# Instead of einsum for batched matmul
+# result = mx.einsum('bchd,bchs->bcds', A, B)
+
+# Use explicit transpose and matmul
+result = A.transpose(...) @ B
+```
+
+### 5. Segment Sum for SSM
+
+The segment sum operation requires careful masking to avoid numerical instability:
+
+```python
+def segment_sum(input_tensor):
+    chunk_size = input_tensor.shape[-1]
+
+    # Expand and tile
+    input_tensor = mx.expand_dims(input_tensor, axis=-1)
+    input_tensor = mx.tile(input_tensor, (1,) * (input_tensor.ndim - 1) + (chunk_size,))
+
+    # Lower triangular mask (excluding diagonal)
+    mask = mx.tril(mx.ones((chunk_size, chunk_size)), k=-1)
+    input_tensor = mx.where(mask.astype(mx.bool_), input_tensor, mx.zeros_like(input_tensor))
+
+    # Cumsum
+    tensor_segsum = mx.cumsum(input_tensor, axis=-2)
+
+    # Apply final mask with -inf for upper triangle
+    mask = mx.tril(mx.ones((chunk_size, chunk_size)), k=0)
+    neg_inf = mx.full(tensor_segsum.shape, float("-inf"), dtype=tensor_segsum.dtype)
+    tensor_segsum = mx.where(mask.astype(mx.bool_), tensor_segsum, neg_inf)
+
+    return tensor_segsum
+```
+
 ## Known Limitations
 
 1. **No KV caching**: Generation requires full sequence recomputation
