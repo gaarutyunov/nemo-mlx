@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nemo-mlx"
+version = "0.1.0"
+description = "NemotronH model implementation in MLX for Apple Silicon"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+]
+torch = [
+    "torch>=2.0.0",
+]
+
+[project.scripts]
+nemo-mlx-convert = "nemo_mlx.convert_weights:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "requires_torch: marks tests as requiring PyTorch (deselect with '-m \"not requires_torch\"')",
+    "requires_weights: marks tests as requiring model weights (deselect with '-m \"not requires_weights\"')",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E402"]
